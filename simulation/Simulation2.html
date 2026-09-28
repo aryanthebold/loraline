@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LoRaLine Mesh Hop Simulation - Pro</title>
+<style>
+  :root { --bg:#0b1a2b; --ink:#eaf2ff; --accent:#ffb347; --sos:#5ad1ff; --haz:#ff6a3d; --panel: rgba(11, 26, 43, 0.85); }
+  html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; font-family: system-ui, Arial, sans-serif; color: var(--ink); }
+  #c { width: 100%; height: 100%; display: block; touch-action: none; }
+  
+  /* Left Control Panel */
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 320px;
+    background: var(--panel); backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(255,255,255,0.1);
+    padding: 20px; box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 15px; overflow-y: auto; z-index: 10;
+  }
+  #sidebar::-webkit-scrollbar { width: 6px; }
+  #sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+  
+  h1 { font-size: 18px; margin: 0; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; }
+  h3 { font-size: 12px; margin: 10px 0 0 0; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; }
+  
+  .pill {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.15);
+    border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.4; color: #a3c2e0;
+  }
+  
+  button {
+    border: none; border-radius: 6px; padding: 12px 14px; font-size: 13px; font-weight: 600; 
+    cursor: pointer; color: #0b1a2b; transition: all 0.15s; display: flex; justify-content: space-between; align-items: center;
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  
+  #hazBtn { background: var(--haz); color: #fff; }
+  #sosBtn { background: var(--sos); }
+  #resetBtn { background: #cfd6dc; }
+  
+  .toggle-btn { background: #2f4055; color: white; border: 1px solid #4a6382; margin-bottom: 6px; width: 100%; }
+  .toggle-btn.offline { background: #5a2323; border-color: #8c3838; color: #ffa3a3; }
+  
+  #hint { position: fixed; bottom: 20px; right: 20px; font-size: 12px; opacity: 0.5; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h1>LoRaLine Control</h1>
+  <div class="pill" id="hopLabel">Mesh network online. Awaiting simulation trigger.</div>
+  
+  <h3>Simulations</h3>
+  <button id="sosBtn">Simulate SOS <span>📡</span></button>
+  <button id="hazBtn">Hazard & Broadcast <span>⚠️</span></button>
+  <button id="resetBtn">Repair All Towers <span>🔧</span></button>
+  
+  <h3>Tower Controls</h3>
+  <div class="pill" style="padding:8px; font-size:11px; opacity:0.8; margin-bottom: 5px;">Toggle nodes to simulate failure and observe mesh rerouting.</div>
+  <div id="nodeToggles"></div>
+</div>
+<div id="hint">Drag to rotate &middot; Scroll to zoom</div>
+<canvas id="c"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true; // Enable Shadows
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0b1a2b, 80, 280);
+scene.background = new THREE.Color(0x0b1a2b);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
+let camTarget = new THREE.Vector3(10, 15, 0);
+let camAngleX = 0.5, camAngleY = -0.6, camDist = 160;
+function updateCamera(){
+  camera.position.set(
+    camTarget.x + camDist*Math.cos(camAngleX)*Math.sin(camAngleY),
+    camTarget.y + camDist*Math.sin(camAngleX),
+    camTarget.z + camDist*Math.cos(camAngleX)*Math.cos(camAngleY)
+  );
+  camera.lookAt(camTarget);
+}
+updateCamera();
+
+// Controls
+let dragging=false, lastX=0, lastY=0;
+canvas.addEventListener('mousedown', e=>{dragging=true; lastX=e.clientX; lastY=e.clientY;});
+window.addEventListener('mousemove', e=>{ if(!dragging)return;
+  camAngleY -= (e.clientX-lastX)*0.006;
+  camAngleX = Math.max(0.08, Math.min(1.1, camAngleX + (e.clientY-lastY)*0.006));
+  lastX=e.clientX; lastY=e.clientY; updateCamera();
+});
+window.addEventListener('mouseup', ()=>dragging=false);
+canvas.addEventListener('wheel', e=>{camDist=Math.max(60,Math.min(250,camDist+e.deltaY*0.1)); updateCamera();},{passive:true});
+
+// Lighting
+scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x1a2b1a, 0.6));
+const sun = new THREE.DirectionalLight(0xfff2d0, 1.2);
+sun.position.set(-50, 80, 40);
+sun.castShadow = true;
+sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
+sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
+sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
+scene.add(sun);
+
+// Terrain
+function terrainHeight(x, z){
+  const peak = 28, spread = 22;
+  return peak * Math.exp(-((x/spread)**2)) + 1.5 * Math.sin(x*0.15) + 1.2 * Math.cos(z*0.1);
+}
+const W=280, D=140, SX=140, SZ=70;
+const geo = new THREE.PlaneGeometry(W,D,SX,SZ);
+geo.rotateX(-Math.PI/2);
+const colors=[]; const c1=new THREE.Color(0x2f6b3a), c2=new THREE.Color(0x6a7a40), c3=new THREE.Color(0xa8a8a8);
+const pos = geo.attributes.position;
+for(let i=0;i<pos.count;i++){
+  const x=pos.getX(i), z=pos.getZ(i);
+  const h = terrainHeight(x, z) + (Math.random()-0.5)*1.2;
+  pos.setY(i,h);
+  const t = Math.min(1, Math.max(0, h/26));
+  const col = t<0.45 ? c1.clone().lerp(c2, t/0.45) : c2.clone().lerp(c3,(t-0.45)/0.55);
+  colors.push(col.r, col.g, col.b);
+}
+geo.setAttribute('color', new THREE.Float32BufferAttribute(colors,3));
+geo.computeVertexNormals();
+const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({vertexColors:true, flatShading:true}));
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Decorate with trees
+function addTree(x, z){
+  const h = terrainHeight(x,z);
+  const tree = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.4,1.5), new THREE.MeshLambertMaterial({color:0x4a3b2c}));
+  trunk.position.y = 0.75; trunk.castShadow = true;
+  const leaves = new THREE.Mesh(new THREE.ConeGeometry(2, 4, 5), new THREE.MeshLambertMaterial({color:0x1b4a22, flatShading:true}));
+  leaves.position.y = 3; leaves.castShadow = true;
+  tree.add(trunk); tree.add(leaves);
+  tree.position.set(x, h, z);
+  tree.scale.setScalar(0.7 + Math.random()*0.6);
+  scene.add(tree);
+}
+for(let i=0; i<60; i++){
+  let tx = (Math.random()-0.5)*260;
+  let tz = (Math.random()-0.5)*120;
+  if(Math.abs(tx) > 15 && Math.abs(tx) < 110) addTree(tx, tz);
+}
+
+// Nodes
+const nodeDefs = [
+  {x:-110, z:-15, type:'village', label:'West Valley Village'},
+  {x:-95,  z:25,  type:'village', label:'Riverside Settlement'},
+  {x:-80,  z:-5,  type:'tower',   label:'Sensor Node W1'},
+  {x:-60,  z:18,  type:'tower',   label:'Relay W2'},
+  {x:-45,  z:-12, type:'tower',   label:'Relay W3'},
+  {x:-25,  z:10,  type:'tower',   label:'Hill Climb Relay'},
+  {x:0,    z:-5,  type:'tower',   label:'Summit Master Node'},
+  {x:25,   z:15,  type:'tower',   label:'Descent Relay'},
+  {x:45,   z:-10, type:'tower',   label:'Relay E1'},
+  {x:70,   z:5,   type:'tower',   label:'Relay E2'},
+  {x:90,   z:-20, type:'tower',   label:'Sensor Node E3'},
+  {x:105,  z:20,  type:'village', label:'East Valley Village'},
+  {x:120,  z:-10, type:'village', label:'Mining Outpost'},
+  {x:120,  z:25,  type:'control', label:'Central Control Room'},
+];
+const nodes = nodeDefs.map((n, i)=>({...n, id:i, y:terrainHeight(n.x, n.z), damaged:false}));
+
+// 3D Models
+function hut(x,y,z){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.5,1.8,2.5), new THREE.MeshLambertMaterial({color:0xd8c39a}));
+  body.position.y=0.9; body.castShadow=true; g.add(body);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(2.2,1.5,4), new THREE.MeshLambertMaterial({color:0xa1442e}));
+  roof.position.y=2.5; roof.rotation.y=Math.PI/4; roof.castShadow=true; g.add(roof);
+  g.position.set(x,y,z); return g;
+}
+function villageGroup(n){
+  const g=new THREE.Group();
+  [[-3,-2],[0,2],[3.5,-0.5]].forEach(([dx,dz])=>g.add(hut(dx,0,dz)));
+  g.position.set(n.x,n.y,n.z); return g;
+}
+function towerGroup(n){
+  const g=new THREE.Group();
+  const poleMat = new THREE.MeshLambertMaterial({color:0xcfd6dc});
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.5,8,8), poleMat);
+  pole.position.y=4; pole.castShadow=true; g.add(pole);
+  const light=new THREE.Mesh(new THREE.SphereGeometry(0.4,12,12), new THREE.MeshStandardMaterial({color:0xff5a5a, emissive:0xff2020, emissiveIntensity:1}));
+  light.position.y=8.4; g.add(light);
+  g.userData.pole=pole; g.userData.light=light;
+  g.position.set(n.x,n.y,n.z); return g;
+}
+function controlRoomGroup(n){
+  const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(8,4,6), new THREE.MeshLambertMaterial({color:0x3a4a63}));
+  base.position.y=2; base.castShadow=true; g.add(base);
+  const dish=new THREE.Mesh(new THREE.CylinderGeometry(2,2,0.4,20), new THREE.MeshLambertMaterial({color:0xe8e8e8, side:THREE.DoubleSide}));
+  dish.rotation.x=Math.PI/2.5; dish.position.set(0,6.5,0.5); dish.castShadow=true; g.add(dish);
+  const light=new THREE.Mesh(new THREE.SphereGeometry(0.5,12,12), new THREE.MeshStandardMaterial({color:0x5ad1ff, emissive:0x2aa8dd, emissiveIntensity:1.1}));
+  light.position.set(0,4.5,3); g.add(light);
+  g.userData.light=light; g.position.set(n.x,n.y,n.z); return g;
+}
+
+nodes.forEach(n=>{
+  if(n.type==='village') n.mesh=villageGroup(n);
+  else if(n.type==='control') n.mesh=controlRoomGroup(n);
+  else n.mesh=towerGroup(n);
+  scene.add(n.mesh);
+});
+
+// Network Graph setup
+function dist3(a,b){ return Math.hypot(a.x-b.x, (a.y-b.y)*1.5, a.z-b.z); }
+const edges = [];
+for(let i=0;i<nodes.length;i++){
+  for(let j=i+1;j<nodes.length;j++){
+    if(dist3(nodes[i],nodes[j]) < 38){
+      edges.push([i,j,dist3(nodes[i],nodes[j])]);
+    }
+  }
+}
+
+// Draw static mesh lines
+const lineMat = new THREE.LineBasicMaterial({color:0x3f6f9a, transparent:true, opacity:0.3});
+edges.forEach(([i,j])=>{
+  const a=nodes[i], b=nodes[j];
+  const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a.x,a.y+4,a.z), new THREE.Vector3(b.x,b.y+4,b.z)]);
+  scene.add(new THREE.Line(g, lineMat));
+});
+
+let pathLines = [];
+function clearPathLines(){ pathLines.forEach(l=>scene.remove(l)); pathLines=[]; }
+function drawPathSegment(a, b, color){
+  const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a.x,a.y+7,a.z), new THREE.Vector3(b.x,b.y+7,b.z)]);
+  const line = new THREE.Line(g, new THREE.LineBasicMaterial({color:color, linewidth:3}));
+  scene.add(line); pathLines.push(line);
+}
+
+// Dijkstra Algorithm
+function dijkstra(startIdx, endIdx){
+  const dist = new Array(nodes.length).fill(Infinity), prev = new Array(nodes.length).fill(-1), visited = new Array(nodes.length).fill(false);
+  dist[startIdx]=0;
+  const adj = Array.from({length:nodes.length},()=>[]);
+  edges.forEach(([i,j,w])=>{
+    if(nodes[i].damaged || nodes[j].damaged) return;
+    adj[i].push([j,w]); adj[j].push([i,w]);
+  });
+  
+  for(let k=0;k<nodes.length;k++){
+    let u=-1, best=Infinity;
+    for(let i=0;i<nodes.length;i++) if(!visited[i] && dist[i]<best){best=dist[i];u=i;}
+    if(u===-1) break;
+    visited[u]=true;
+    adj[u].forEach(([v,w])=>{ if(dist[u]+w<dist[v]){dist[v]=dist[u]+w; prev[v]=u;} });
+  }
+  
+  if(endIdx !== null){
+    if(dist[endIdx]===Infinity) return null;
+    const path=[]; let cur=endIdx;
+    while(cur!==-1){ path.unshift(cur); cur=prev[cur]; }
+    return path.map(i=>nodes[i]);
+  } else {
+    // Return distance map for broadcast
+    return {dist, prev};
+  }
+}
+
+// Packet visual
+const packet = new THREE.Mesh(new THREE.SphereGeometry(1,16,16), new THREE.MeshStandardMaterial({color:0xffd166, emissive:0xffb347, emissiveIntensity:1.5}));
+packet.visible=false;
+const packetLight = new THREE.PointLight(0xffd166, 1.5, 20);
+packet.add(packetLight);
+scene.add(packet);
+
+const ringMat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.8, side:THREE.DoubleSide});
+const pulses = [];
+function spawnPulse(node, color, scale=1){
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.5,1.2,32), ringMat.clone());
+  ring.material.color.set(color); ring.rotation.x=-Math.PI/2;
+  ring.position.set(node.x, node.y+0.5, node.z);
+  scene.add(ring);
+  ring.userData = {t:0, scaleMax: 20*scale};
+  pulses.push(ring);
+}
+
+// UI Elements & State
+const hopLabel = document.getElementById('hopLabel');
+const hazBtn = document.getElementById('hazBtn'), sosBtn = document.getElementById('sosBtn'), resetBtn = document.getElementById('resetBtn');
+const toggleContainer = document.getElementById('nodeToggles');
+
+let running=false, path=null, hopIdx=0, t=0, color=0xffd166;
+let broadcasting=false, broadcastData=null, broadcastTime=0;
+let sosToggle=0;
+
+function setButtons(disabled){ hazBtn.disabled=disabled; sosBtn.disabled=disabled; resetBtn.disabled=disabled; }
+
+// Build Sidebar toggles
+nodes.filter(n=>n.type==='tower').forEach(n=>{
+  const btn = document.createElement('button');
+  btn.className = 'toggle-btn';
+  btn.innerHTML = `${n.label} <span class="status-icon">🟢</span>`;
+  btn.onclick = () => toggleDamage(n.id);
+  n.uiBtn = btn;
+  toggleContainer.appendChild(btn);
+});
+
+function toggleDamage(idx){
+  if(running || broadcasting) return; // Don't allow breaks mid-transmission
+  const n = nodes[idx];
+  n.damaged = !n.damaged;
+  n.mesh.rotation.z = n.damaged ? 0.3 : 0;
+  n.mesh.userData.pole.material.color.set(n.damaged ? 0x5a2323 : 0xcfd6dc);
+  n.uiBtn.classList.toggle('offline', n.damaged);
+  n.uiBtn.querySelector('.status-icon').textContent = n.damaged ? '🔴' : '🟢';
+  hopLabel.textContent = n.damaged ? `${n.label} offline. Mesh will route around it.` : `${n.label} restored.`;
+}
+
+function startAlert(sourceIdx, kind){
+  if(running || broadcasting) return;
+  const controlIdx = nodes.findIndex(n=>n.type==='control');
+  const p = dijkstra(sourceIdx, controlIdx);
+  
+  if(!p){ hopLabel.textContent='CRITICAL ERROR: No path available to Control Room!'; return; }
+  
+  clearPathLines();
+  path=p; hopIdx=0; t=0; running=true; broadcasting=false;
+  setButtons(true);
+  
+  color = kind==='haz' ? 0xff6a3d : 0x5ad1ff;
+  packet.material.color.set(color); packet.material.emissive.set(color); packetLight.color.set(color);
+  spawnPulse(nodes[sourceIdx], color);
+  packet.visible=true; packet.position.set(path[0].x, path[0].y+7, path[0].z);
+  
+  hopLabel.textContent = kind==='haz' ? `Hazard detected at ${nodes[sourceIdx].label}! Sending to Control Room...` 
+                                      : `SOS from ${nodes[sourceIdx].label}. Requesting help...`;
+  packet.userData.kind = kind;
+}
+
+function startBroadcast(){
+  running = false; packet.visible = false;
+  broadcasting = true; broadcastTime = 0;
+  
+  const controlIdx = nodes.findIndex(n=>n.type==='control');
+  broadcastData = dijkstra(controlIdx, null); // Get distances to all nodes
+  broadcastData.visited = new Array(nodes.length).fill(false);
+  broadcastData.visited[controlIdx] = true;
+  
+  hopLabel.innerHTML = `<span style="color:var(--haz)">ALERT RECEIVED! Control Room broadcasting evacuation protocol to all nodes...</span>`;
+  spawnPulse(nodes[controlIdx], 0xff3333, 2);
+}
+
+hazBtn.addEventListener('click', ()=>{
+  const hazardNodes = nodes.filter(n=>n.label.includes('Sensor'));
+  const randNode = hazardNodes[Math.floor(Math.random()*hazardNodes.length)];
+  startAlert(randNode.id, 'haz');
+});
+
+sosBtn.addEventListener('click', ()=>{
+  const villages = nodes.filter(n=>n.type==='village');
+  startAlert(villages[sosToggle].id, 'sos');
+  sosToggle = (sosToggle + 1) % villages.length;
+});
+
+resetBtn.addEventListener('click', ()=>{
+  nodes.forEach(n=>{ 
+    if(n.damaged) toggleDamage(n.id); 
+  });
+  clearPathLines();
+  hopLabel.textContent='Mesh fully restored and operational.';
+});
+
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // Phase 1: Alert Hop
+  if(running){
+    t += dt / 0.7; // Speed
+    const a = path[hopIdx], b = path[hopIdx+1];
+    if(b){
+      const tt = Math.min(1, t);
+      const arc = Math.sin(tt*Math.PI)*5; // Jump arc
+      packet.position.set(a.x+(b.x-a.x)*tt, a.y+7+(b.y-a.y)*tt+arc, a.z+(b.z-a.z)*tt);
+      if(t >= 1){
+        drawPathSegment(a, b, color);
+        hopIdx++; t=0;
+        hopLabel.textContent = `Packet hopped to ${b.label}...`;
+        spawnPulse(b, color, 0.5);
+      }
+    } else {
+      // Reached control room
+      if(packet.userData.kind === 'haz'){
+        startBroadcast();
+      } else {
+        running = false; packet.visible = false; setButtons(false);
+        hopLabel.textContent = 'SOS reached Control Room successfully. Dispatching help.';
+      }
+    }
+  }
+
+  // Phase 2: Mesh Broadcast
+  if(broadcasting){
+    broadcastTime += dt * 40; // Expand rate
+    let allDone = true;
+    for(let i=0; i<nodes.length; i++){
+      if(broadcastData.dist[i] !== Infinity && !broadcastData.visited[i]){
+        allDone = false;
+        if(broadcastData.dist[i] < broadcastTime){
+          broadcastData.visited[i] = true;
+          spawnPulse(nodes[i], 0xff3333, 1.2);
+          const p = broadcastData.prev[i];
+          if(p !== -1) drawPathSegment(nodes[p], nodes[i], 0xff3333);
+        }
+      }
+    }
+    if(allDone && broadcastTime > 150){
+      broadcasting = false; setButtons(false);
+      setTimeout(()=> clearPathLines(), 3000);
+      hopLabel.textContent = 'Broadcast complete. All available nodes received the warning.';
+    }
+  }
+
+  // Visual Pulses & Blinking Lights
+  for(let i=pulses.length-1; i>=0; i--){
+    const r=pulses[i]; r.userData.t += dt;
+    const s = 1 + r.userData.t * r.userData.scaleMax; 
+    r.scale.set(s,s,s);
+    r.material.opacity = Math.max(0, 0.8 - r.userData.t*1.5);
+    if(r.userData.t > 1) { scene.remove(r); pulses.splice(i,1); }
+  }
+
+  const time = performance.now()*0.003;
+  nodes.forEach(n=>{
+    if(n.type==='tower'){
+      n.mesh.userData.light.material.emissiveIntensity = n.damaged ? 0.1 : 0.6 + 0.4*Math.sin(time + n.x);
+    } else if(n.type==='control'){
+      n.mesh.userData.light.material.emissiveIntensity = 0.8 + 0.4*Math.sin(time*2);
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// Handle clicks on towers in 3D space
+const ray = new THREE.Raycaster();
+let downX=0, downY=0;
+canvas.addEventListener('mousedown', e=>{downX=e.clientX; downY=e.clientY;});
+canvas.addEventListener('mouseup', e=>{ 
+  if(Math.hypot(e.clientX-downX, e.clientY-downY)<4){
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX-rect.left)/rect.width)*2-1, -((e.clientY-rect.top)/rect.height)*2+1);
+    ray.setFromCamera(ndc, camera);
+    const towerMeshes = nodes.filter(n=>n.type==='tower').map(n=>n.mesh);
+    const hits = ray.intersectObjects(towerMeshes, true);
+    if(hits.length){
+      let obj = hits[0].object;
+      while(obj.parent && !nodes.find(n=>n.mesh===obj)) obj=obj.parent;
+      const n = nodes.find(n=>n.mesh===obj);
+      if(n) toggleDamage(n.id);
+    }
+  }
+});
+
+function resize(){ 
+  const w=innerWidth, h=innerHeight; 
+  camera.aspect = w/h; camera.updateProjectionMatrix(); 
+  renderer.setSize(w,h); 
+}
+window.addEventListener('resize', resize); resize();
+</script>
+</body>
+</html>
