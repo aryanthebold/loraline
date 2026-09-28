@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoRaLine | Pitch Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .radar-grid {
+      background-size: 40px 40px;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+
+    .progress-ring__circle {
+      transition: stroke-dashoffset 0.04s linear;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+
+<body
+  class="bg-[#0b1120] text-slate-200 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-100">
+
+  <!-- Elegant Header -->
+  <header class="glass-panel sticky top-0 z-50 px-8 py-4 flex items-center justify-between shadow-lg shadow-black/20">
+    <div class="flex items-center gap-4">
+      <div class="relative flex h-3 w-3">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-3">
+          LoRaLine
+          <span
+            class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-mono font-medium px-2 py-0.5 rounded-full">Pitch
+            Demo</span>
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">3-Tier Priority Mesh Flooding Demonstration</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-6">
+      <div class="flex flex-col items-end">
+        <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Audio Output</span>
+        <button onclick="toggleAudio()"
+          class="text-sm font-medium transition hover:text-white flex items-center gap-2 text-slate-300">
+          <span id="audio-state" class="text-emerald-400">Enabled</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5 10V7a2 2 0 012-2h10a2 2 0 012 2v3m-5 4v8m0 0l-4-4m4 4l4-4">
+            </path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+
+    <!-- LEFT COLUMN: Controls (4 Cols) -->
+    <section class="lg:col-span-4 flex flex-col gap-6">
+
+      <!-- Call Point Panel -->
+      <div class="glass-panel rounded-2xl p-6 shadow-2xl flex flex-col relative overflow-hidden">
+        <!-- Background subtle glow -->
+        <div class="absolute -top-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none">
+        </div>
+
+        <div class="relative z-10">
+          <h2 class="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Node A (Origin)
+          </h2>
+          <p class="text-xs text-slate-400 mb-6">Send messages into the mesh network.</p>
+
+          <div class="flex flex-col gap-4">
+
+            <!-- Normal Message Button -->
+            <button onclick="executeFlood('normal')"
+              class="group relative w-full bg-slate-800/50 hover:bg-slate-800 transition-all duration-300 rounded-2xl p-4 border border-white/5 hover:border-cyan-500/40 text-left cursor-pointer overflow-hidden flex items-center gap-4 shadow-md hover:shadow-cyan-500/10 active:scale-95">
+              <div
+                class="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/0 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+              </div>
+              <div class="text-2xl bg-cyan-500/10 p-3 rounded-xl border border-cyan-500/30 shadow-inner relative z-10">
+                💬</div>
+              <div class="relative z-10 flex-1">
+                <div class="font-bold text-slate-100 text-sm tracking-wide">Send Normal Message</div>
+                <div class="text-[10px] text-cyan-400 font-mono mt-0.5">Tier 3 • Standard Queueing (Slow)</div>
+              </div>
+            </button>
+
+            <div class="relative flex py-2 items-center">
+              <div class="flex-grow border-t border-white/10"></div>
+              <span class="flex-shrink-0 mx-4 text-xs font-mono text-slate-500">OR</span>
+              <div class="flex-grow border-t border-white/10"></div>
+            </div>
+
+            <!-- Giant SOS Button -->
+            <button onmousedown="startHold()" onmouseup="cancelHold()" onmouseleave="cancelHold()"
+              ontouchstart="startHold()" ontouchend="cancelHold()"
+              class="group relative w-full bg-slate-800/50 hover:bg-slate-800 transition-all duration-300 rounded-2xl p-5 border border-white/5 hover:border-red-500/40 text-left cursor-pointer overflow-hidden flex flex-col items-center justify-center text-center shadow-xl">
+              <div
+                class="absolute inset-0 bg-gradient-to-t from-red-500/0 via-red-500/0 to-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+              </div>
+
+              <div
+                class="text-3xl bg-red-500/10 p-3 rounded-xl border border-red-500/30 shadow-inner mb-3 relative z-10 group-hover:scale-105 transition-transform duration-300">
+                🚨</div>
+
+              <div class="relative z-10 w-full flex items-center justify-center gap-3">
+                <svg class="w-10 h-10" viewBox="0 0 36 36">
+                  <path class="text-white/5" stroke-width="3" stroke="currentColor" fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  <path id="ring-sos" class="text-red-500 progress-ring__circle" stroke-width="3"
+                    stroke-dasharray="100, 100" stroke-dashoffset="100" stroke-linecap="round" stroke="currentColor"
+                    fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <div class="text-left">
+                  <div class="font-bold text-slate-100 text-base uppercase tracking-wider">SOS Broadcast</div>
+                  <div class="text-[10px] text-red-400 font-mono mt-0.5">Tier 1 • Priority Preemption (Fast)</div>
+                </div>
+              </div>
+            </button>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Disruptions & Density -->
+      <div class="glass-panel rounded-2xl p-6 shadow-2xl flex-1 flex flex-col relative overflow-hidden">
+        <!-- Background subtle glow -->
+        <div class="absolute -bottom-20 -right-20 w-40 h-40 bg-rose-500/10 rounded-full blur-3xl pointer-events-none">
+        </div>
+
+        <div class="relative z-10">
+          <h2 class="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            Network Configuration
+          </h2>
+          <p class="text-xs text-slate-400 mb-5">Adjust topology scale and simulate node failures.</p>
+
+          <div class="space-y-5">
+
+            <!-- Density Slider -->
+            <div class="bg-slate-800/40 rounded-xl border border-white/5 p-4">
+              <div class="flex justify-between items-center mb-2">
+                <label class="text-sm font-bold text-slate-200">Network Density</label>
+                <span class="text-xs font-mono text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded"><span
+                    id="density-val">0</span> Extra Nodes</span>
+              </div>
+              <p class="text-[10px] text-slate-500 mb-3">Slide to add dynamic nodes to the mesh. Proximity links will
+                auto-form.</p>
+              <input type="range" min="0" max="30" value="0"
+                class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                onchange="updateDensity(this.value)"
+                oninput="document.getElementById('density-val').innerText = this.value">
+            </div>
+
+            <!-- Node B Toggle -->
+            <div
+              class="flex items-center justify-between p-4 bg-slate-800/40 rounded-xl border border-white/5 hover:border-white/10 transition group">
+              <div>
+                <div class="text-sm font-bold text-slate-200">Node B (Primary Route)</div>
+                <div class="text-xs text-slate-500 mt-0.5">The main path in the middle.</div>
+              </div>
+              <button onclick="toggleNodeState('nodeB')" id="btn-node-nodeB"
+                class="relative inline-flex h-7 w-12 items-center rounded-full bg-emerald-500 transition-colors focus:outline-none">
+                <span
+                  class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform translate-x-6 shadow-sm"></span>
+              </button>
+            </div>
+
+            <!-- Node D Toggle -->
+            <div
+              class="flex items-center justify-between p-4 bg-slate-800/40 rounded-xl border border-white/5 hover:border-white/10 transition group">
+              <div>
+                <div class="text-sm font-bold text-slate-200">Node D (Backup Route)</div>
+                <div class="text-xs text-slate-500 mt-0.5">The alternate route nearby.</div>
+              </div>
+              <button onclick="toggleNodeState('nodeD')" id="btn-node-nodeD"
+                class="relative inline-flex h-7 w-12 items-center rounded-full bg-emerald-500 transition-colors focus:outline-none">
+                <span
+                  class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform translate-x-6 shadow-sm"></span>
+              </button>
+            </div>
+          </div>
+
+          <button onclick="resetAllNodes()"
+            class="mt-6 w-full py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-white/5 hover:bg-white/10 transition border border-white/5 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+              </path>
+            </svg>
+            Restore Failed Nodes
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Canvas & Logs (8 Cols) -->
+    <section class="lg:col-span-8 flex flex-col gap-6">
+
+      <!-- Simulation Canvas Area -->
+      <div class="glass-panel rounded-2xl flex flex-col overflow-hidden shadow-2xl relative min-h-[500px]">
+        <div class="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold text-slate-200">Topology Map</h3>
+            <span id="map-badge"
+              class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20 uppercase tracking-wider">4-Node
+              Network</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs">
+            <div class="flex items-center gap-2 text-slate-400">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></span> Normal
+              Traffic
+            </div>
+            <div class="flex items-center gap-2 text-slate-400">
+              <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span> SOS Traffic
+            </div>
+          </div>
+        </div>
+
+        <div class="flex-1 relative radar-grid flex items-center justify-center p-2 bg-[#080d17]">
+          <!-- Inner shadow for depth -->
+          <div class="absolute inset-0 shadow-[inset_0_0_50px_rgba(0,0,0,0.8)] pointer-events-none"></div>
+          <canvas id="meshCanvas" width="940" height="500"
+            class="w-full h-full max-h-[540px] rounded object-contain relative z-10"></canvas>
+        </div>
+      </div>
+
+      <!-- Live Delivery Results -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Action Status -->
+        <div class="glass-panel rounded-2xl p-5 flex flex-col shadow-lg">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+            Node C Receipt Status
+            <span id="delivery-status"
+              class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">STANDBY</span>
+          </h3>
+
+          <div
+            class="flex-1 bg-slate-900/50 rounded-xl border border-white/5 p-5 flex flex-col justify-center min-h-[120px]">
+            <div id="conveyance-status-box" class="text-base text-slate-300 leading-relaxed font-medium">
+              Waiting for broadcast...
+            </div>
+
+            <div class="mt-4 space-y-3 text-sm hidden" id="hq-data-panel">
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-slate-500">Alert Priority:</span>
+                <span id="dec-tier" class="font-bold text-white">-</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-slate-500">Fastest Route Found:</span>
+                <span id="dec-final-route"
+                  class="font-mono text-[11px] text-emerald-400 text-right max-w-[200px] truncate"
+                  title="Hover to see full path">-</span>
+              </div>
+              <div class="flex justify-between pt-1">
+                <span class="text-slate-500">Total Transit Time:</span>
+                <span id="total-delay" class="font-bold font-mono text-white">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Feed -->
+        <div class="glass-panel rounded-2xl p-5 flex flex-col shadow-lg">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+            Event Stream
+            <div class="flex gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/50 animate-pulse"
+                style="animation-delay: 200ms"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/20 animate-pulse"
+                style="animation-delay: 400ms"></span>
+            </div>
+          </h3>
+          <div id="terminal-feed"
+            class="flex-1 bg-[#0b1120] rounded-xl border border-white/5 p-4 font-mono text-xs overflow-y-auto space-y-2.5 h-[120px]">
+            <div class="text-slate-500"><span class="opacity-50">[SYSTEM]</span> Ready. Base nodes initialized.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    // --- Synthesizer Engine ---
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('audio-state').innerText = soundEnabled ? "Enabled" : "Muted";
+      document.getElementById('audio-state').className = soundEnabled ? "text-emerald-400" : "text-slate-500";
+    }
+
+    function playTone(freq, type, duration, vol = 0.15) {
+      if (!soundEnabled) return;
+      initAudio();
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) { }
+    }
+
+    function playSiren() {
+      if (!soundEnabled) return;
+      initAudio();
+      let count = 0;
+      const siren = setInterval(() => {
+        playTone(count % 2 === 0 ? 880 : 660, "sawtooth", 0.16, 0.2);
+        count++;
+        if (count > 6) clearInterval(siren);
+      }, 160);
+    }
+
+    function playNormalPing() {
+      if (!soundEnabled) return;
+      initAudio();
+      playTone(600, "sine", 0.1, 0.1);
+      setTimeout(() => playTone(800, "sine", 0.1, 0.1), 120);
+    }
+
+    function playHopChirp(isFast) {
+      if (!soundEnabled) return;
+      playTone(isFast ? 1500 : 1000, "sine", 0.05, 0.08);
+    }
+
+    function playHQConfirmation(isFast) {
+      if (!soundEnabled) return;
+      if (isFast) {
+        playTone(523.25, "square", 0.2, 0.15);
+        setTimeout(() => playTone(659.25, "square", 0.2, 0.15), 100);
+        setTimeout(() => playTone(783.99, "square", 0.4, 0.2), 200);
+      } else {
+        playTone(440, "sine", 0.2, 0.15);
+        setTimeout(() => playTone(554.37, "sine", 0.3, 0.15), 150);
+      }
+    }
+
+    // --- Topology & Data Engine ---
+    const canvas = document.getElementById('meshCanvas');
+    const ctx = canvas.getContext('2d');
+    const terminal = document.getElementById('terminal-feed');
+    const statusBox = document.getElementById('conveyance-status-box');
+    const hqDataPanel = document.getElementById('hq-data-panel');
+
+    let holdTimer = null;
+    let holdProgress = 0;
+    const HOLD_DURATION = 3000;
+    let expandingWaves = [];
+    let activePulseBranches = [];
+    let visitedNodesBuffer = new Set();
+    let hqDelivered = false;
+
+    // The Base 4-Node Kite Topology
+    const baseNodes = {
+      nodeA: { id: "nodeA", x: 120, y: 250, label: "Node A", desc: "Origin", type: "ORIGIN", healthy: true, color: "#10b981", activeStatus: "" },
+      nodeB: { id: "nodeB", x: 470, y: 120, label: "Node B", desc: "Primary Relay", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" },
+      nodeD: { id: "nodeD", x: 470, y: 380, label: "Node D", desc: "Backup Relay", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" },
+      nodeC: { id: "nodeC", x: 820, y: 250, label: "Node C", desc: "Destination", type: "DEST", healthy: true, color: "#f59e0b", activeStatus: "" }
+    };
+
+    let nodes = {};
+    let meshLinks = [];
+    let densityCount = 0;
+
+    // Seed Random for consistent dynamic generation
+    function mulberry32(a) {
+      return function () {
+        var t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      }
+    }
+
+    function updateDensity(val) {
+      densityCount = parseInt(val);
+      document.getElementById('map-badge').innerText = (4 + densityCount) + "-Node Network";
+      generateMesh();
+    }
+
+    function generateMesh() {
+      // Deep copy base nodes
+      nodes = JSON.parse(JSON.stringify(baseNodes));
+
+      meshLinks = [
+        ["nodeA", "nodeB"],
+        ["nodeA", "nodeD"],
+        ["nodeB", "nodeC"],
+        ["nodeD", "nodeC"]
+      ];
+
+      const rng = mulberry32(12345); // Fixed seed so layout is stable at same density
+
+      for (let i = 0; i < densityCount; i++) {
+        const id = "dyn_" + i;
+        // Keep them mostly in the middle
+        const x = 250 + (rng() * 440);
+        const y = 80 + (rng() * 340);
+        nodes[id] = { id: id, x: x, y: y, label: `Node ${i+1}`, desc: "Relay", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" };
+      }
+
+      const allIds = Object.keys(nodes);
+      const DIST_THRESHOLD = 200;
+
+      for (let i = 0; i < allIds.length; i++) {
+        for (let j = i + 1; j < allIds.length; j++) {
+          const n1 = nodes[allIds[i]];
+          const n2 = nodes[allIds[j]];
+
+          // Never directly connect A and C
+          if ((n1.id === 'nodeA' && n2.id === 'nodeC') || (n1.id === 'nodeC' && n2.id === 'nodeA')) continue;
+
+          const dist = Math.sqrt(Math.pow(n1.x - n2.x, 2) + Math.pow(n1.y - n2.y, 2));
+          if (dist < DIST_THRESHOLD) {
+            const linkExists = meshLinks.some(link => (link[0] === n1.id && link[1] === n2.id) || (link[0] === n2.id && link[1] === n1.id));
+            if (!linkExists) {
+              meshLinks.push([n1.id, n2.id]);
+            }
+          }
+        }
+      }
+      log(`Mesh rebuilt: ${4 + densityCount} nodes, ${meshLinks.length} connections.`, "text-slate-500");
+    }
+
+    // Initialize mesh on load
+    generateMesh();
+
+    function log(msg, color = "text-slate-300") {
+      const ts = (performance.now() / 1000).toFixed(2);
+      const row = document.createElement('div');
+      row.className = color;
+      row.innerHTML = `<span class="opacity-40">[${ts}s]</span> ${msg}`;
+      terminal.appendChild(row);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // --- Canvas Rendering ---
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Links
+      meshLinks.forEach(([a, b]) => {
+        const na = nodes[a];
+        const nb = nodes[b];
+        const isHealthy = na.healthy && nb.healthy;
+
+        ctx.beginPath();
+        ctx.moveTo(na.x, na.y);
+        ctx.lineTo(nb.x, nb.y);
+        ctx.strokeStyle = isHealthy ? "rgba(255, 255, 255, 0.12)" : "rgba(239, 68, 68, 0.1)";
+        ctx.lineWidth = isHealthy ? 1.5 : 1;
+        if (!isHealthy) ctx.setLineDash([4, 4]);
+        else ctx.setLineDash([]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      // Draw Local Wave Pulses
+      for (let i = expandingWaves.length - 1; i >= 0; i--) {
+        const w = expandingWaves[i];
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r, 0, 2 * Math.PI);
+        ctx.strokeStyle = `rgba(${w.rgb}, ${w.alpha})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        w.r += w.speed;
+        w.alpha -= 0.02;
+        if (w.alpha <= 0) expandingWaves.splice(i, 1);
+      }
+
+      // Draw Traveling Branch Pulses
+      for (let i = activePulseBranches.length - 1; i >= 0; i--) {
+        const b = activePulseBranches[i];
+        b.progress += b.speed;
+
+        const curX = b.fromNode.x + (b.toNode.x - b.fromNode.x) * b.progress;
+        const curY = b.fromNode.y + (b.toNode.y - b.fromNode.y) * b.progress;
+
+        // Laser Trail
+        ctx.beginPath();
+        ctx.moveTo(b.fromNode.x, b.fromNode.y);
+        ctx.lineTo(curX, curY);
+        ctx.strokeStyle = `rgba(${b.rgb}, 0.8)`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Pulse Head
+        ctx.beginPath();
+        ctx.arc(curX, curY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (b.progress >= 1) {
+          activePulseBranches.splice(i, 1);
+          handleBranchArrival(b);
+        }
+      }
+
+      // Draw Nodes
+      Object.keys(nodes).forEach(k => {
+        const n = nodes[k];
+
+        // Glow if active
+        if (n.activeStatus) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 20, 0, 2 * Math.PI);
+          ctx.fillStyle = n.activeStatusColor + "33";
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 14, 0, 2 * Math.PI);
+        ctx.fillStyle = n.healthy === false ? "#ef4444" : n.color;
+        ctx.fill();
+        ctx.strokeStyle = "#080d17";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.fillStyle = "#f1f5f9";
+        ctx.font = "600 14px 'Inter', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(n.label, n.x, n.y + 30);
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "400 12px 'Inter', sans-serif";
+        ctx.fillText(n.desc, n.x, n.y + 46);
+
+        if (n.activeStatus) {
+          ctx.fillStyle = n.activeStatusColor || "#06b6d4";
+          ctx.font = "700 10px 'JetBrains Mono', monospace";
+          ctx.fillText(n.activeStatus, n.x, n.y - 20);
+        }
+      });
+
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+    // --- Branch Arrival Logic ---
+    function handleBranchArrival(branch) {
+      const dest = branch.toNode;
+      if (!dest || !dest.healthy) return;
+
+      expandingWaves.push({ x: dest.x, y: dest.y, r: 8, alpha: 1, rgb: branch.rgb, speed: branch.isSOS ? 4 : 2 });
+
+      if (visitedNodesBuffer.has(dest.id)) {
+        // Dropped Duplicate
+        dest.activeStatus = "DROP";
+        dest.activeStatusColor = "#f59e0b";
+        setTimeout(() => { if (dest.activeStatus === "DROP") dest.activeStatus = ""; }, 1000);
+        return; // Don't log drops to save terminal spam in dense meshes
+      }
+
+      visitedNodesBuffer.add(dest.id);
+
+      // Reduce audio spam for high density
+      if (densityCount < 10 || Math.random() > 0.5) {
+        playHopChirp(branch.isSOS);
+      }
+
+      // Destination Reached
+      if (dest.type === "DEST") {
+        if (!hqDelivered) {
+          hqDelivered = true;
+          const totalMs = Math.round(performance.now() - branch.startTime);
+
+          document.getElementById('total-delay').innerText = `${totalMs} ms`;
+          const statusEl = document.getElementById('delivery-status');
+          statusEl.innerText = "DELIVERED";
+          statusEl.className = "px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] animate-pulse";
+
+          playHQConfirmation(branch.isSOS);
+
+          dest.activeStatus = "RECEIVED";
+          dest.activeStatusColor = "#10b981";
+
+          hqDataPanel.classList.remove('hidden');
+          const routeStr = branch.pathTrail.join(" → ");
+          document.getElementById('dec-final-route').innerText = routeStr;
+          document.getElementById('dec-final-route').title = routeStr;
+
+          if (branch.isSOS) {
+            document.getElementById('dec-tier').innerText = "Tier 1 (Priority Preemption)";
+            document.getElementById('dec-tier').className = "font-bold text-red-400";
+          } else {
+            document.getElementById('dec-tier').innerText = "Tier 3 (Standard Queueing)";
+            document.getElementById('dec-tier').className = "font-bold text-cyan-400";
+          }
+
+          statusBox.innerHTML = `Message successfully delivered to Node C!`;
+          log(`Arrived at Node C in ${totalMs}ms`, "text-emerald-400 font-bold");
+        }
+        return;
+      }
+
+      // Relay node: Forward
+      dest.activeStatus = `FWD`;
+      dest.activeStatusColor = "#06b6d4";
+      setTimeout(() => { if (dest.activeStatus === "FWD") dest.activeStatus = ""; }, 800);
+
+      const forwardNeighbors = [];
+      meshLinks.forEach(([a, b]) => {
+        let neighbor = null;
+        if (a === dest.id) neighbor = b;
+        else if (b === dest.id) neighbor = a;
+
+        if (neighbor && neighbor !== branch.fromNode.id && nodes[neighbor].healthy) {
+          forwardNeighbors.push(neighbor);
+        }
+      });
+
+      forwardNeighbors.forEach((nextTarget, idx) => {
+        // Base speed based on priority. SOS is fast, Normal is slow to simulate queueing
+        const baseSpeed = branch.isSOS ? 0.016 : 0.005;
+        const randomVariation = Math.random() * 0.004;
+
+        activePulseBranches.push({
+          fromNode: dest,
+          toNode: nodes[nextTarget],
+          progress: 0,
+          speed: baseSpeed + randomVariation,
+          color: branch.color,
+          rgb: branch.rgb,
+          isSOS: branch.isSOS,
+          startTime: branch.startTime,
+          pathTrail: [...branch.pathTrail, nodes[nextTarget].label]
+        });
+      });
+    }
+
+    // --- Dispatch Controls ---
+    function startHold() {
+      initAudio();
+      holdProgress = 0;
+      const ring = document.getElementById('ring-sos');
+      const startTime = performance.now();
+
+      statusBox.innerHTML = `Holding SOS button...`;
+      hqDataPanel.classList.add('hidden');
+      playTone(400, "triangle", 0.08, 0.08);
+
+      holdTimer = setInterval(() => {
+        const elapsed = performance.now() - startTime;
+        holdProgress = Math.min(elapsed / HOLD_DURATION, 1);
+        ring.style.strokeDashoffset = (100 - holdProgress * 100);
+
+        if (holdProgress >= 1) {
+          clearInterval(holdTimer);
+          ring.style.strokeDashoffset = 100;
+          executeFlood('sos');
+        }
+      }, 30);
+    }
+
+    function cancelHold() {
+      if (holdTimer) {
+        clearInterval(holdTimer);
+        holdTimer = null;
+        if (holdProgress > 0 && holdProgress < 1) {
+          statusBox.innerHTML = `Waiting for broadcast...`;
+        }
+      }
+      document.getElementById('ring-sos').style.strokeDashoffset = 100;
+      holdProgress = 0;
+    }
+
+    function executeFlood(tier) {
+      if (tier === 'sos') {
+        playSiren();
+      } else {
+        playNormalPing();
+        hqDataPanel.classList.add('hidden');
+      }
+
+      const isSOS = tier === 'sos';
+      const color = isSOS ? "#ef4444" : "#06b6d4";
+      const rgb = isSOS ? "239, 68, 68" : "6, 182, 212";
+
+      activePulseBranches = [];
+      visitedNodesBuffer = new Set(["nodeA"]);
+      hqDelivered = false;
+
+      const statusEl = document.getElementById('delivery-status');
+      statusEl.innerText = "IN TRANSIT";
+      statusEl.className = `px-2 py-0.5 rounded text-[10px] animate-pulse ${isSOS ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}`;
+
+      const startTime = performance.now();
+
+      nodes.nodeA.activeStatus = "TX";
+      nodes.nodeA.activeStatusColor = color;
+      expandingWaves.push({ x: nodes.nodeA.x, y: nodes.nodeA.y, r: 10, alpha: 1, rgb: rgb, speed: isSOS ? 4 : 2 });
+
+      if (isSOS) {
+        statusBox.innerHTML = `SOS Broadcast initiated! Bypassing queue via Priority Routing.`;
+        log(`Node A: Tier-1 SOS Broadcast launched`, `text-red-400 font-bold`);
+      } else {
+        statusBox.innerHTML = `Normal message sent. Processing via standard queueing...`;
+        log(`Node A: Tier-3 Message launched`, `text-cyan-400 font-bold`);
+      }
+
+      const initialNeighbors = [];
+      meshLinks.forEach(([a, b]) => {
+        if (a === "nodeA" && nodes[b].healthy) initialNeighbors.push(b);
+        else if (b === "nodeA" && nodes[a].healthy) initialNeighbors.push(a);
+      });
+
+      initialNeighbors.forEach((targetNodeId) => {
+        const targetNode = nodes[targetNodeId];
+        const baseSpeed = isSOS ? 0.016 : 0.005;
+        const randomVariation = Math.random() * 0.004;
+
+        activePulseBranches.push({
+          fromNode: nodes.nodeA,
+          toNode: targetNode,
+          progress: 0,
+          speed: baseSpeed + randomVariation,
+          color: color,
+          rgb: rgb,
+          isSOS: isSOS,
+          startTime: startTime,
+          pathTrail: ["Node A", targetNode.label]
+        });
+      });
+
+      setTimeout(() => { if (nodes.nodeA.activeStatus === "TX") nodes.nodeA.activeStatus = ""; }, 1000);
+    }
+
+    // --- Breakage Controls ---
+    function toggleNodeState(nodeKey) {
+      nodes[nodeKey].healthy = !nodes[nodeKey].healthy;
+      const btn = document.getElementById(`btn-node-${nodeKey}`);
+      const togglePill = btn.querySelector('span');
+
+      if (!nodes[nodeKey].healthy) {
+        btn.classList.remove('bg-emerald-500');
+        btn.classList.add('bg-slate-600');
+        togglePill.classList.remove('translate-x-6');
+        togglePill.classList.add('translate-x-1');
+
+        statusBox.innerHTML = `<span class="text-white">${nodes[nodeKey].label}</span> failed! The network will reroute.`;
+        log(`Fail: ${nodes[nodeKey].label} offline`, "text-rose-400");
+      } else {
+        btn.classList.remove('bg-slate-600');
+        btn.classList.add('bg-emerald-500');
+        togglePill.classList.remove('translate-x-1');
+        togglePill.classList.add('translate-x-6');
+
+        statusBox.innerHTML = `<span class="text-white">${nodes[nodeKey].label}</span> is back online.`;
+        log(`Restore: ${nodes[nodeKey].label} online`, "text-emerald-400");
+      }
+    }
+
+    function resetAllNodes() {
+      Object.keys(nodes).forEach(k => {
+        if (k === 'nodeB' || k === 'nodeD') {
+          if (!nodes[k].healthy) {
+            toggleNodeState(k);
+          }
+        }
+      });
+      statusBox.innerHTML = `Topology reset. Nodes A, B, C, D are healthy.`;
+    }
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LoRaLine | Mesh Flooding Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .radar-grid {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+    .progress-ring__circle {
+      transition: stroke-dashoffset 0.04s linear;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+  </style>
+</head>
+<body class="bg-[#0b1120] text-slate-200 min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-100">
+
+  <!-- Elegant Header -->
+  <header class="glass-panel sticky top-0 z-50 px-8 py-4 flex items-center justify-between shadow-lg shadow-black/20">
+    <div class="flex items-center gap-4">
+      <div class="relative flex h-3 w-3">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-3">
+          LoRaLine 
+          <span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-mono font-medium px-2 py-0.5 rounded-full">Simulator</span>
+        </h1>
+        <p class="text-xs text-slate-400 mt-0.5">Parallel Multi-Path Mesh Flooding Demonstration</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-6">
+      <div class="flex flex-col items-end">
+        <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Audio Output</span>
+        <button onclick="toggleAudio()" class="text-sm font-medium transition hover:text-white flex items-center gap-2 text-slate-300">
+          <span id="audio-state" class="text-emerald-400">Enabled</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5 10V7a2 2 0 012-2h10a2 2 0 012 2v3m-5 4v8m0 0l-4-4m4 4l4-4"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+
+    <!-- LEFT COLUMN: Controls (4 Cols) -->
+    <section class="lg:col-span-4 flex flex-col gap-6">
+      
+      <!-- Call Point Panel -->
+      <div class="glass-panel rounded-2xl p-6 shadow-2xl flex flex-col relative overflow-hidden">
+        <!-- Background subtle glow -->
+        <div class="absolute -top-20 -left-20 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl"></div>
+        
+        <div class="relative z-10">
+          <h2 class="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            Send Broadcast
+          </h2>
+          <p class="text-xs text-slate-400 mb-6">Hold any button for 3 seconds to trigger a parallel broadcast across the network.</p>
+
+          <div class="flex flex-col gap-4">
+            
+            <!-- Medical Button -->
+            <button 
+              onmousedown="startHold(1, 'Medical Emergency', '#ef4444', 'med')"
+              onmouseup="cancelHold()"
+              onmouseleave="cancelHold()"
+              ontouchstart="startHold(1, 'Medical Emergency', '#ef4444', 'med')"
+              ontouchend="cancelHold()"
+              class="group relative w-full bg-slate-800/50 hover:bg-slate-800 transition-all duration-300 rounded-xl p-4 border border-white/5 hover:border-red-500/30 text-left cursor-pointer overflow-hidden flex items-center justify-between">
+              <div class="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/0 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div class="flex items-center gap-4 relative z-10">
+                <div class="text-2xl bg-red-500/10 p-2.5 rounded-lg border border-red-500/20 shadow-inner">🚑</div>
+                <div>
+                  <div class="font-semibold text-slate-100 text-sm">Medical SOS</div>
+                  <div class="text-xs text-slate-500 font-mono mt-0.5">880Hz Siren</div>
+                </div>
+              </div>
+              <svg class="w-8 h-8 relative z-10" viewBox="0 0 36 36">
+                <path class="text-white/5" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path id="ring-med" class="text-red-500 progress-ring__circle" stroke-width="3" stroke-dasharray="100, 100" stroke-dashoffset="100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+            </button>
+
+            <!-- Landslide Button -->
+            <button 
+              onmousedown="startHold(2, 'Landslide Cutoff', '#3b82f6', 'land')"
+              onmouseup="cancelHold()"
+              onmouseleave="cancelHold()"
+              ontouchstart="startHold(2, 'Landslide Cutoff', '#3b82f6', 'land')"
+              ontouchend="cancelHold()"
+              class="group relative w-full bg-slate-800/50 hover:bg-slate-800 transition-all duration-300 rounded-xl p-4 border border-white/5 hover:border-blue-500/30 text-left cursor-pointer overflow-hidden flex items-center justify-between">
+              <div class="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div class="flex items-center gap-4 relative z-10">
+                <div class="text-2xl bg-blue-500/10 p-2.5 rounded-lg border border-blue-500/20 shadow-inner">🏔️</div>
+                <div>
+                  <div class="font-semibold text-slate-100 text-sm">Landslide Cutoff</div>
+                  <div class="text-xs text-slate-500 font-mono mt-0.5">160Hz Rumble</div>
+                </div>
+              </div>
+              <svg class="w-8 h-8 relative z-10" viewBox="0 0 36 36">
+                <path class="text-white/5" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path id="ring-land" class="text-blue-500 progress-ring__circle" stroke-width="3" stroke-dasharray="100, 100" stroke-dashoffset="100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+            </button>
+
+            <!-- Security Button -->
+            <button 
+              onmousedown="startHold(3, 'Security Threat', '#eab308', 'sec')"
+              onmouseup="cancelHold()"
+              onmouseleave="cancelHold()"
+              ontouchstart="startHold(3, 'Security Threat', '#eab308', 'sec')"
+              ontouchend="cancelHold()"
+              class="group relative w-full bg-slate-800/50 hover:bg-slate-800 transition-all duration-300 rounded-xl p-4 border border-white/5 hover:border-amber-500/30 text-left cursor-pointer overflow-hidden flex items-center justify-between">
+              <div class="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/0 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div class="flex items-center gap-4 relative z-10">
+                <div class="text-2xl bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 shadow-inner">🛡️</div>
+                <div>
+                  <div class="font-semibold text-slate-100 text-sm">Security Alert</div>
+                  <div class="text-xs text-slate-500 font-mono mt-0.5">1.2kHz Beep</div>
+                </div>
+              </div>
+              <svg class="w-8 h-8 relative z-10" viewBox="0 0 36 36">
+                <path class="text-white/5" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path id="ring-sec" class="text-amber-500 progress-ring__circle" stroke-width="3" stroke-dasharray="100, 100" stroke-dashoffset="100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+            </button>
+            
+            <button onclick="triggerQuickTapRejection()" class="w-full text-center py-2.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-white/5 transition border border-transparent hover:border-white/5 mt-1">
+              Test Accidental Bump (Reject)
+            </button>
+          </div>
+
+          <div id="local-siren" class="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3 hidden items-center justify-center gap-2 animate-pulse">
+            <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            <span class="text-xs text-red-400 font-bold">LOCAL SIREN TRIGGERED</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Disruptions -->
+      <div class="glass-panel rounded-2xl p-6 shadow-2xl flex-1 flex flex-col relative overflow-hidden">
+        <!-- Background subtle glow -->
+        <div class="absolute -bottom-20 -right-20 w-40 h-40 bg-rose-500/10 rounded-full blur-3xl"></div>
+        
+        <div class="relative z-10">
+          <h2 class="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            Network Disruptions
+          </h2>
+          <p class="text-xs text-slate-400 mb-5">Disable relays to simulate network failures. The mesh will automatically find alternate routes.</p>
+
+          <div class="space-y-3">
+            <!-- Node Toggle Component Builder -->
+            <script>
+              const toggles = [
+                { id: 'relay201', name: 'Relay 201', loc: 'North Ridge' },
+                { id: 'relay202', name: 'Relay 202', loc: 'Valley Mid' },
+                { id: 'relay203', name: 'Relay 203', loc: 'South Pass' },
+                { id: 'relay204', name: 'Relay 204', loc: 'River Gorge' }
+              ];
+              toggles.forEach(t => {
+                document.write(`
+                  <div class="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl border border-white/5 hover:border-white/10 transition group">
+                    <div>
+                      <div class="text-sm font-medium text-slate-200">${t.name}</div>
+                      <div class="text-[11px] text-slate-500">${t.loc}</div>
+                    </div>
+                    <button onclick="toggleNodeState('${t.id}')" id="btn-node-${t.id}" class="relative inline-flex h-6 w-11 items-center rounded-full bg-emerald-500 transition-colors focus:outline-none">
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-6 shadow-sm"></span>
+                    </button>
+                  </div>
+                `);
+              });
+            </script>
+          </div>
+          
+          <button onclick="resetAllNodes()" class="mt-6 w-full py-2.5 rounded-lg text-xs font-medium text-slate-300 bg-white/5 hover:bg-white/10 transition border border-white/5 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Restore All Nodes
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: Canvas & Logs (8 Cols) -->
+    <section class="lg:col-span-8 flex flex-col gap-6">
+      
+      <!-- Simulation Canvas Area -->
+      <div class="glass-panel rounded-2xl flex flex-col overflow-hidden shadow-2xl relative min-h-[500px]">
+        <div class="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold text-slate-200">Live Network Topography</h3>
+            <span id="topology-mode-badge" class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20 uppercase tracking-wider">Multi-Path Ready</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs">
+            <div class="flex items-center gap-2 text-slate-400">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></span> Traveling
+            </div>
+            <div class="flex items-center gap-2 text-slate-400">
+              <span class="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]"></span> Dropped
+            </div>
+          </div>
+        </div>
+
+        <div class="flex-1 relative radar-grid flex items-center justify-center p-2 bg-[#080d17]">
+          <!-- Inner shadow for depth -->
+          <div class="absolute inset-0 shadow-[inset_0_0_50px_rgba(0,0,0,0.8)] pointer-events-none"></div>
+          <canvas id="meshCanvas" width="940" height="500" class="w-full h-full max-h-[540px] rounded object-contain relative z-10"></canvas>
+        </div>
+
+        <!-- Simulation Stats Bar -->
+        <div class="grid grid-cols-3 gap-px bg-white/5 border-t border-white/5 text-center">
+          <div class="bg-[#0b1120]/50 p-3 backdrop-blur-md">
+            <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1">Active Branches</div>
+            <div id="active-branches-count" class="text-sm font-mono font-bold text-cyan-400">0</div>
+          </div>
+          <div class="bg-[#0b1120]/50 p-3 backdrop-blur-md">
+            <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1">Total Transit Time</div>
+            <div id="total-delay" class="text-sm font-mono font-bold text-emerald-400">0 ms</div>
+          </div>
+          <div class="bg-[#0b1120]/50 p-3 backdrop-blur-md">
+            <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1">Duplicates Dropped</div>
+            <div id="dup-counter" class="text-sm font-mono font-bold text-amber-400">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Delivery Results -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Action Status -->
+        <div class="glass-panel rounded-2xl p-5 flex flex-col shadow-lg">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+            HQ Receipt Status
+            <span id="delivery-status" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">STANDBY</span>
+          </h3>
+          
+          <div class="flex-1 bg-slate-900/50 rounded-xl border border-white/5 p-4 flex flex-col justify-center">
+            <div id="conveyance-time" class="hidden"></div> <!-- Kept for JS compatibility -->
+            <div id="conveyance-status-box" class="text-sm text-slate-300 leading-relaxed font-medium">
+              Waiting for broadcast. Press and hold an emergency button to observe parallel path flooding.
+            </div>
+            
+            <div class="mt-4 space-y-2 text-sm hidden" id="hq-data-panel">
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-slate-500">Alert Type</span>
+                <span id="dec-alert" class="font-bold text-white">-</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2">
+                <span class="text-slate-500">Winning Path</span>
+                <span id="dec-final-route" class="font-bold text-emerald-400 text-right max-w-[200px] truncate" title="Hover to see full path">-</span>
+              </div>
+              <div class="flex justify-between pt-1">
+                <span class="text-slate-500">Priority Level</span>
+                <span id="dec-tier" class="font-bold text-red-400">-</span>
+              </div>
+            </div>
+          </div>
+          <!-- Hidden structural components kept for JS compatibility -->
+          <div class="hidden">
+            <span id="crc-badge"></span>
+            <span id="packet-hex"></span>
+            <span id="dec-node"></span>
+          </div>
+        </div>
+
+        <!-- Terminal Feed -->
+        <div class="glass-panel rounded-2xl p-5 flex flex-col shadow-lg">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+            Event Stream
+            <div class="flex gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/50 animate-pulse" style="animation-delay: 200ms"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400/20 animate-pulse" style="animation-delay: 400ms"></span>
+            </div>
+          </h3>
+          <div id="terminal-feed" class="flex-1 bg-[#0b1120] rounded-xl border border-white/5 p-4 font-mono text-xs overflow-y-auto space-y-2.5 h-[160px]">
+            <div class="text-slate-500"><span class="opacity-50">[SYSTEM]</span> Simulation ready. All redundant passes online.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    // --- Synthesizer Engine ---
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('audio-state').innerText = soundEnabled ? "Enabled" : "Muted";
+      document.getElementById('audio-state').className = soundEnabled ? "text-emerald-400" : "text-slate-500";
+    }
+
+    function playTone(freq, type, duration, vol = 0.15) {
+      if (!soundEnabled) return;
+      initAudio();
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function playAlertSignature(type) {
+      if (!soundEnabled) return;
+      initAudio();
+      if (type === 'med') {
+        let count = 0;
+        const siren = setInterval(() => {
+          playTone(count % 2 === 0 ? 880 : 660, "sawtooth", 0.16, 0.2);
+          count++;
+          if (count > 6) clearInterval(siren);
+        }, 160);
+      } else if (type === 'land') {
+        let freq = 180;
+        const rumble = setInterval(() => {
+          playTone(freq, "triangle", 0.2, 0.35);
+          freq -= 18;
+          if (freq < 90) clearInterval(rumble);
+        }, 110);
+      } else if (type === 'sec') {
+        let i = 0;
+        const beeps = setInterval(() => {
+          playTone(1200 - (i * 100), "square", 0.08, 0.18);
+          i++;
+          if (i >= 4) clearInterval(beeps);
+        }, 100);
+      }
+    }
+
+    function playHopChirp(stepIndex) {
+      if (!soundEnabled) return;
+      playTone(1350 + (stepIndex * 220), "sine", 0.08, 0.15);
+    }
+
+    function playHQConfirmation() {
+      if (!soundEnabled) return;
+      playTone(523.25, "sine", 0.35, 0.2);
+      setTimeout(() => playTone(659.25, "sine", 0.35, 0.2), 70);
+      setTimeout(() => playTone(783.99, "sine", 0.5, 0.25), 140);
+    }
+
+    // --- Topology & Multi-Branch Definitions ---
+    const canvas = document.getElementById('meshCanvas');
+    const ctx = canvas.getContext('2d');
+    const terminal = document.getElementById('terminal-feed');
+    const statusBox = document.getElementById('conveyance-status-box');
+    const hqDataPanel = document.getElementById('hq-data-panel');
+
+    let holdTimer = null;
+    let holdProgress = 0;
+    const HOLD_DURATION = 3000;
+    let expandingWaves = [];
+    let activePulseBranches = [];
+    let visitedNodesBuffer = new Set();
+    let hqDelivered = false;
+    let duplicateDropCount = 0;
+
+    const nodes = {
+      village1: { id: "village1", code: 101, x: 80,  y: 190, label: "Node 101", desc: "Village Start", type: "VILLAGE", healthy: true, color: "#10b981", activeStatus: "" },
+      village2: { id: "village2", code: 102, x: 80,  y: 360, label: "Node 102", desc: "Kaho Hamlet", type: "VILLAGE", healthy: true, color: "#10b981", activeStatus: "" },
+      
+      relay201: { id: "relay201", code: 201, x: 280, y: 100, label: "Relay 201", desc: "North Ridge", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" },
+      relay202: { id: "relay202", code: 202, x: 280, y: 260, label: "Relay 202", desc: "Valley Mid", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" },
+      relay203: { id: "relay203", code: 203, x: 490, y: 140, label: "Relay 203", desc: "South Pass", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" },
+      relay204: { id: "relay204", code: 204, x: 490, y: 390, label: "Relay 204", desc: "River Gorge", type: "RELAY", healthy: true, color: "#06b6d4", activeStatus: "" },
+
+      outpost:  { id: "outpost",  code: 301, x: 700, y: 260, label: "Node 301", desc: "Outpost", type: "GATEWAY", healthy: true, color: "#8b5cf6", activeStatus: "" },
+      hq:       { id: "hq",       code: 401, x: 870, y: 260, label: "Node 401", desc: "District HQ", type: "HQ", healthy: true, color: "#f59e0b", activeStatus: "" }
+    };
+
+    const meshLinks = [
+      ["village1", "relay201"],
+      ["village1", "relay202"],
+      ["village2", "relay202"],
+      ["village2", "relay204"],
+      ["relay201", "relay203"],
+      ["relay201", "relay202"],
+      ["relay202", "relay203"],
+      ["relay202", "relay204"],
+      ["relay203", "outpost"],
+      ["relay204", "outpost"],
+      ["outpost",  "hq"]
+    ];
+
+    function log(msg, color = "text-slate-300") {
+      const ts = (performance.now() / 1000).toFixed(2);
+      const row = document.createElement('div');
+      row.className = color;
+      row.innerHTML = `<span class="opacity-40">[${ts}s]</span> ${msg}`;
+      terminal.appendChild(row);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // --- Main Canvas Render Loop ---
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Physical Links (Underneath)
+      meshLinks.forEach(([a, b]) => {
+        const na = nodes[a];
+        const nb = nodes[b];
+        const isHealthy = na.healthy && nb.healthy;
+
+        ctx.beginPath();
+        ctx.moveTo(na.x, na.y);
+        ctx.lineTo(nb.x, nb.y);
+        ctx.strokeStyle = isHealthy ? "rgba(255, 255, 255, 0.15)" : "rgba(239, 68, 68, 0.15)";
+        ctx.lineWidth = isHealthy ? 2 : 1;
+        if (!isHealthy) ctx.setLineDash([5, 5]);
+        else ctx.setLineDash([]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      // Draw Expanding Local Wave Pulses
+      for (let i = expandingWaves.length - 1; i >= 0; i--) {
+        const w = expandingWaves[i];
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r, 0, 2 * Math.PI);
+        ctx.strokeStyle = `rgba(${w.rgb}, ${w.alpha})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        w.r += 3.5;
+        w.alpha -= 0.02;
+        if (w.alpha <= 0) expandingWaves.splice(i, 1);
+      }
+
+      // Draw All Concurrent Traveling Pulse Branches in Parallel
+      for (let i = activePulseBranches.length - 1; i >= 0; i--) {
+        const b = activePulseBranches[i];
+        b.progress += b.speed;
+
+        const curX = b.fromNode.x + (b.toNode.x - b.fromNode.x) * b.progress;
+        const curY = b.fromNode.y + (b.toNode.y - b.fromNode.y) * b.progress;
+
+        // Glowing Laser Trail
+        ctx.beginPath();
+        ctx.moveTo(b.fromNode.x, b.fromNode.y);
+        ctx.lineTo(curX, curY);
+        ctx.strokeStyle = `rgba(${b.rgb}, 0.8)`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Glowing Pulse Head
+        ctx.beginPath();
+        ctx.arc(curX, curY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (b.progress >= 1) {
+          activePulseBranches.splice(i, 1);
+          handleBranchArrival(b);
+        }
+      }
+
+      document.getElementById('active-branches-count').innerText = activePulseBranches.length;
+
+      // Draw Nodes
+      Object.keys(nodes).forEach(k => {
+        const n = nodes[k];
+
+        // Node Glow if active
+        if (n.activeStatus) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, 16, 0, 2 * Math.PI);
+            ctx.fillStyle = n.activeStatusColor + "33"; // 20% opacity hex
+            ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 10, 0, 2 * Math.PI);
+        ctx.fillStyle = n.healthy === false ? "#ef4444" : n.color;
+        ctx.fill();
+        ctx.strokeStyle = "#080d17";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.fillStyle = "#f1f5f9";
+        ctx.font = "600 12px 'Inter', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(n.label, n.x, n.y + 24);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "400 10px 'Inter', sans-serif";
+        ctx.fillText(n.desc, n.x, n.y + 38);
+
+        if (n.activeStatus) {
+          ctx.fillStyle = n.activeStatusColor || "#06b6d4";
+          ctx.font = "700 10px 'JetBrains Mono', monospace";
+          ctx.fillText(n.activeStatus, n.x, n.y - 16);
+        }
+      });
+
+      requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+    // --- Branch Arrival & De-duplication Routing Engine ---
+    function handleBranchArrival(branch) {
+      const dest = branch.toNode;
+      if (!dest || !dest.healthy) return;
+
+      expandingWaves.push({ x: dest.x, y: dest.y, r: 8, alpha: 1, rgb: branch.rgb });
+
+      if (visitedNodesBuffer.has(dest.id)) {
+        duplicateDropCount++;
+        document.getElementById('dup-counter').innerText = duplicateDropCount;
+        dest.activeStatus = "DROP";
+        dest.activeStatusColor = "#f59e0b"; 
+        log(`Drop: ${dest.label} blocked duplicate from ${branch.fromNode.label}`, "text-amber-400/80");
+        setTimeout(() => { if (dest.activeStatus === "DROP") dest.activeStatus = ""; }, 1000);
+        return;
+      }
+
+      visitedNodesBuffer.add(dest.id);
+      playHopChirp(branch.hopIndex);
+
+      if (dest.type === "HQ") {
+        if (!hqDelivered) {
+          hqDelivered = true;
+          const totalMs = Math.round(performance.now() - branch.startTime);
+          
+          document.getElementById('total-delay').innerText = `${totalMs} ms`;
+          const statusEl = document.getElementById('delivery-status');
+          statusEl.innerText = "DELIVERED";
+          statusEl.className = "px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] animate-pulse";
+
+          playHQConfirmation();
+
+          dest.activeStatus = "ACK RECEIVED";
+          dest.activeStatusColor = "#10b981";
+
+          hqDataPanel.classList.remove('hidden');
+          document.getElementById('dec-tier').innerText = "Tier-1 Critical";
+          document.getElementById('dec-alert').innerText = branch.alertName;
+          document.getElementById('dec-alert').style.color = branch.color;
+          const routeStr = branch.pathTrail.join(" → ");
+          document.getElementById('dec-final-route').innerText = routeStr;
+          document.getElementById('dec-final-route').title = routeStr; // for hover
+
+          statusBox.innerHTML = `Message arrived at District HQ in <b class="text-white">${totalMs}ms</b>.`;
+          log(`HQ ACK: Received via ${routeStr} (${totalMs}ms)`, "text-emerald-400 font-bold");
+        }
+        return;
+      }
+
+      dest.activeStatus = `FORWARDING`;
+      dest.activeStatusColor = "#06b6d4";
+
+      const forwardNeighbors = [];
+      meshLinks.forEach(([a, b]) => {
+        let neighbor = null;
+        if (a === dest.id) neighbor = b;
+        else if (b === dest.id) neighbor = a;
+
+        if (neighbor && neighbor !== branch.fromNode.id && nodes[neighbor].healthy) {
+          forwardNeighbors.push(nodes[neighbor]);
+        }
+      });
+
+      if (forwardNeighbors.length > 0) {
+          log(`Split: ${dest.label} forwarding to ${forwardNeighbors.length} paths`, "text-cyan-400/80");
+      }
+
+      forwardNeighbors.forEach((nextTarget, idx) => {
+        activePulseBranches.push({
+          fromNode: dest,
+          toNode: nextTarget,
+          progress: 0,
+          speed: 0.016 + (idx * 0.002), 
+          color: branch.color,
+          rgb: branch.rgb,
+          alertName: branch.alertName,
+          alertCode: branch.alertCode,
+          startTime: branch.startTime,
+          hopIndex: branch.hopIndex + 1,
+          pathTrail: [...branch.pathTrail, nextTarget.label]
+        });
+      });
+
+      setTimeout(() => { if (dest.activeStatus === "FORWARDING") dest.activeStatus = ""; }, 1500);
+    }
+
+    // --- Hold Button & Multi-Path Dispatch ---
+    function startHold(alertCode, name, color, soundType) {
+      initAudio();
+      holdProgress = 0;
+      const ringId = alertCode === 1 ? 'ring-med' : (alertCode === 2 ? 'ring-land' : 'ring-sec');
+      const ring = document.getElementById(ringId);
+      const startTime = performance.now();
+
+      statusBox.innerHTML = `Hold detected. Verifying intent to prevent accidental broadcast...`;
+      hqDataPanel.classList.add('hidden');
+      playTone(400, "triangle", 0.08, 0.08);
+
+      holdTimer = setInterval(() => {
+        const elapsed = performance.now() - startTime;
+        holdProgress = Math.min(elapsed / HOLD_DURATION, 1);
+        ring.style.strokeDashoffset = (100 - holdProgress * 100);
+
+        if (holdProgress >= 1) {
+          clearInterval(holdTimer);
+          ring.style.strokeDashoffset = 100;
+          executeMultiPathFlood(alertCode, name, color, soundType);
+        }
+      }, 30);
+    }
+
+    function cancelHold() {
+      if (holdTimer) {
+        clearInterval(holdTimer);
+        holdTimer = null;
+        if (holdProgress > 0 && holdProgress < 1) {
+          statusBox.innerHTML = `Broadcast aborted. Button released before 3-second threshold.`;
+          log(`Abort: Button released early. Radio sleeping.`, "text-slate-400");
+        }
+      }
+      document.getElementById('ring-med').style.strokeDashoffset = 100;
+      document.getElementById('ring-land').style.strokeDashoffset = 100;
+      document.getElementById('ring-sec').style.strokeDashoffset = 100;
+      holdProgress = 0;
+    }
+
+    function triggerQuickTapRejection() {
+      playTone(220, "square", 0.15, 0.1);
+      statusBox.innerHTML = `Accidental bump detected. Ignored by 3-second hold gate.`;
+      log(`Reject: Quick tap ignored.`, "text-slate-400");
+    }
+
+    function executeMultiPathFlood(code, name, color, soundType) {
+      playAlertSignature(soundType);
+
+      const sirenBanner = document.getElementById('local-siren');
+      sirenBanner.classList.remove('hidden');
+      sirenBanner.classList.add('flex');
+      setTimeout(() => {
+        sirenBanner.classList.add('hidden');
+        sirenBanner.classList.remove('flex');
+      }, 3500);
+
+      activePulseBranches = [];
+      visitedNodesBuffer = new Set(["village1"]);
+      hqDelivered = false;
+      duplicateDropCount = 0;
+      document.getElementById('dup-counter').innerText = "0";
+      
+      const statusEl = document.getElementById('delivery-status');
+      statusEl.innerText = "IN TRANSIT";
+      statusEl.className = "px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[10px] animate-pulse";
+
+      const rgbMap = { 1: "239, 68, 68", 2: "59, 130, 246", 3: "234, 179, 8" };
+      const startTime = performance.now();
+
+      nodes.village1.activeStatus = "BROADCAST";
+      nodes.village1.activeStatusColor = "#10b981";
+
+      expandingWaves.push({ x: nodes.village1.x, y: nodes.village1.y, r: 10, alpha: 1, rgb: rgbMap[code] });
+
+      statusBox.innerHTML = `Broadcast initiated. <span class="text-white">Node 101</span> is flooding data across all available topology paths simultaneously.`;
+      log(`Tx: ${name} broadcast launched`, `text-[${color}] font-bold`);
+
+      const initialNeighbors = [];
+      meshLinks.forEach(([a, b]) => {
+        if (a === "village1" && nodes[b].healthy) initialNeighbors.push(nodes[b]);
+        else if (b === "village1" && nodes[a].healthy) initialNeighbors.push(nodes[a]);
+      });
+
+      initialNeighbors.forEach((targetNode, idx) => {
+        activePulseBranches.push({
+          fromNode: nodes.village1,
+          toNode: targetNode,
+          progress: 0,
+          speed: 0.017 + (idx * 0.003),
+          color: color,
+          rgb: rgbMap[code],
+          alertName: name,
+          alertCode: code,
+          startTime: startTime,
+          hopIndex: 1,
+          pathTrail: ["Node 101", targetNode.label]
+        });
+      });
+      
+      setTimeout(() => { if (nodes.village1.activeStatus === "BROADCAST") nodes.village1.activeStatus = ""; }, 1500);
+    }
+
+    // --- Breakage & Topology Controls ---
+    function toggleNodeState(nodeKey) {
+      nodes[nodeKey].healthy = !nodes[nodeKey].healthy;
+      const btn = document.getElementById(`btn-node-${nodeKey}`);
+      const togglePill = btn.querySelector('span');
+      
+      if (!nodes[nodeKey].healthy) {
+        btn.classList.remove('bg-emerald-500');
+        btn.classList.add('bg-slate-600');
+        togglePill.classList.remove('translate-x-6');
+        togglePill.classList.add('translate-x-1');
+        
+        statusBox.innerHTML = `<span class="text-white">${nodes[nodeKey].label}</span> went offline. Mesh will bypass this node.`;
+        log(`Network: ${nodes[nodeKey].label} severed`, "text-rose-400");
+      } else {
+        btn.classList.remove('bg-slate-600');
+        btn.classList.add('bg-emerald-500');
+        togglePill.classList.remove('translate-x-1');
+        togglePill.classList.add('translate-x-6');
+        
+        statusBox.innerHTML = `<span class="text-white">${nodes[nodeKey].label}</span> is back online.`;
+        log(`Network: ${nodes[nodeKey].label} restored`, "text-emerald-400");
+      }
+    }
+
+    function resetAllNodes() {
+      Object.keys(nodes).forEach(k => {
+        if (!nodes[k].healthy) {
+            toggleNodeState(k); // visually and logically toggles back
+        }
+      });
+      statusBox.innerHTML = `Topology reset. All nodes healthy.`;
+    }
+  </script>
+</body>
+</html>
